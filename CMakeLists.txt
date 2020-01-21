@@ -29,6 +29,7 @@ if (HAVE_NETINET_IN_H)
     add_definitions("-DHAVE_NETINET_IN_H")
 endif()
 
+message(STATUS "SRC Dir is ${cpp_serializers_SOURCE_DIR}")
 include_directories(${cpp_serializers_SOURCE_DIR})
 
 find_package(ZLIB)
@@ -308,7 +309,7 @@ add_executable(
     ${CAPNPROTO_SERIALIZATION_SOURCES}
     ${BOOST_SERIALIZATION_SOURCES}
     ${CEREAL_SERIALIZATION_SOURCES}
-    ${AVRO_SERIALIZATION_SOURCES}
+    #${AVRO_SERIALIZATION_SOURCES}
     ${FLATBUFFERS_SERIALIZATION_SOURCES}
     ${YAS_SERIALIZATION_SOURCES}
 )

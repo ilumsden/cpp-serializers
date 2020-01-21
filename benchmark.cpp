@@ -26,7 +26,6 @@
 #include "boost/record.hpp"
 #include "msgpack/record.hpp"
 #include "cereal/record.hpp"
-#include "avro/record.hpp"
 #include "flatbuffers/test_generated.h"
 #include "yas/record.hpp"
 #include "nlohmann/record.hpp"
@@ -35,7 +34,11 @@
 
 enum class ThriftSerializationProto { Binary, Compact };
 
-#define NLOHMANN_BINARY_STATUS 0
+#define NLOHMANN_TEXT 0
+#define NLOHMANN_BSON 1
+#define NLOHMANN_CBOR 2
+#define NLOHMANN_MSGPACK 3
+#define NLOHMANN_UBJSON 4
 
 struct Args {
     std::size_t iterations = 0;
@@ -74,12 +77,15 @@ const std::set<std::string> valid_serializers = {
     "boost",
     "msgpack",
     "cereal",
-    "avro",
     "capnproto",
     "flatbuffers",
     "yas",
     "yas-compact",
-    "nlohmann"
+    "nlohmann_text",
+    "nlohmann_bson",
+    "nlohmann_cbor",
+    "nlohmann_msgpack",
+    "nlohmann_ubjson"
 };
 // clang-format on
 
@@ -397,12 +403,12 @@ boost_serialization_test(size_t iterations)
 }
 
 Result
-nlohmann_serialization_test(size_t iterations)
+nlohmann_serialization_test_impl(size_t iterations, unsigned int mode)
 {
     using namespace nlohmann_test;
 
-    Record r1(NLOHMANN_BINARY_STATUS);
-    Record r2(NLOHMANN_BINARY_STATUS);
+    Record r1(mode);
+    Record r2(mode);
 
     for (size_t i = 0; i < kIntegers.size(); i++) {
         r1.ids.push_back(kIntegers[i]);
@@ -415,7 +421,7 @@ nlohmann_serialization_test(size_t iterations)
     std::string serialized;
 
     serialized = serialize(r1);
-    r2 = deserialize(serialized);
+    r2 = deserialize(serialized, mode);
 
     if (r1 != r2) {
         throw std::logic_error("nlohmann's case: deserialization failed");
@@ -425,12 +431,59 @@ nlohmann_serialization_test(size_t iterations)
     for (size_t i = 0; i < iterations; i++) {
         serialized.clear();
         serialized = serialize(r1);
-        r2 = deserialize(serialized);
+        r2 = deserialize(serialized, mode);
     }
     auto finish = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count();
 
-    return Result("nlohmann", "", serialized.size(), duration);
+    std::string mode_str;
+    switch (mode)
+    {
+        case NLOHMANN_TEXT: mode_str = "_text";
+                            break;
+        case NLOHMANN_BSON: mode_str = "_bson";
+                            break;
+        case NLOHMANN_CBOR: mode_str = "_cbor";
+                            break;
+        case NLOHMANN_MSGPACK: mode_str = "_msgpack";
+                               break;
+        case NLOHMANN_UBJSON: mode_str = "ubjson";
+                              break;
+        default: throw std::runtime_error("Invalid Nlohmann run");
+    }
+    std::string result_name = std::string("nlohmann") + mode_str;
+
+    return Result(result_name.c_str(), "", serialized.size(), duration);
+}
+
+Result
+nlohmann_text_serialization_test(size_t iterations)
+{
+    return nlohmann_serialization_test_impl(iterations, NLOHMANN_TEXT);
+}
+
+Result
+nlohmann_bson_serialization_test(size_t iterations)
+{
+    return nlohmann_serialization_test_impl(iterations, NLOHMANN_BSON);
+}
+
+Result
+nlohmann_cbor_serialization_test(size_t iterations)
+{
+    return nlohmann_serialization_test_impl(iterations, NLOHMANN_CBOR);
+}
+
+Result
+nlohmann_msgpack_serialization_test(size_t iterations)
+{
+    return nlohmann_serialization_test_impl(iterations, NLOHMANN_MSGPACK);
+}
+
+Result
+nlohmann_ubjson_serialization_test(size_t iterations)
+{
+    return nlohmann_serialization_test_impl(iterations, NLOHMANN_UBJSON);
 }
 
 Result
@@ -512,58 +565,6 @@ cereal_serialization_test(size_t iterations)
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count();
 
     return Result("cereal", "", serialized.size(), duration);
-}
-
-Result
-avro_serialization_test(size_t iterations)
-{
-    using namespace avro_test;
-
-    Record r1, r2;
-
-    for (size_t i = 0; i < kIntegers.size(); i++) {
-        r1.ids.push_back(kIntegers[i]);
-    }
-
-    for (size_t i = 0; i < kStringsCount; i++) {
-        r1.strings.push_back(kStringValue);
-    }
-
-    std::unique_ptr<avro::OutputStream> out = avro::memoryOutputStream();
-    avro::EncoderPtr encoder = avro::binaryEncoder();
-
-    encoder->init(*out);
-    avro::encode(*encoder, r1);
-
-    auto serialized_size = out->byteCount();
-
-    std::unique_ptr<avro::InputStream> in = avro::memoryInputStream(*out);
-    avro::DecoderPtr decoder = avro::binaryDecoder();
-
-    decoder->init(*in);
-    avro::decode(*decoder, r2);
-
-    if (r1.ids != r2.ids || r1.strings != r2.strings || r2.ids.size() != kIntegers.size()
-        || r2.strings.size() != kStringsCount) {
-        throw std::logic_error("avro's case: deserialization failed");
-    }
-
-    auto start = std::chrono::high_resolution_clock::now();
-    for (size_t i = 0; i < iterations; i++) {
-        auto out = avro::memoryOutputStream();
-        auto encoder = avro::binaryEncoder();
-        encoder->init(*out);
-        avro::encode(*encoder, r1);
-
-        auto in = avro::memoryInputStream(*out);
-        auto decoder = avro::binaryDecoder();
-        decoder->init(*in);
-        avro::decode(*decoder, r2);
-    }
-    auto finish = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count();
-
-    return Result("avro", "", serialized_size, duration);
 }
 
 Result
@@ -719,10 +720,6 @@ main(int argc, char** argv)
             results.push_back(cereal_serialization_test(args.iterations));
         }
 
-        if (args.serializers.empty() || args.serializers.find("avro") != args.serializers.end()) {
-            results.push_back(avro_serialization_test(args.iterations));
-        }
-
         if (args.serializers.empty() || args.serializers.find("flatbuffers") != args.serializers.end()) {
             results.push_back(flatbuffers_serialization_test(args.iterations));
         }
@@ -735,8 +732,24 @@ main(int argc, char** argv)
             results.push_back(yas_serialization_test<yas::binary | yas::no_header | yas::compacted>(args.iterations));
         }
 
-        if (args.serializers.empty() || args.serializers.find("nlohmann") != args.serializers.end()) {
-            results.push_back(nlohmann_serialization_test(args.iterations));
+        if (args.serializers.empty() || args.serializers.find("nlohmann_text") != args.serializers.end()) {
+            results.push_back(nlohmann_text_serialization_test(args.iterations));
+        }
+
+        if (args.serializers.empty() || args.serializers.find("nlohmann_bson") != args.serializers.end()) {
+            results.push_back(nlohmann_bson_serialization_test(args.iterations));
+        }
+
+        if (args.serializers.empty() || args.serializers.find("nlohmann_cbor") != args.serializers.end()) {
+            results.push_back(nlohmann_cbor_serialization_test(args.iterations));
+        }
+
+        if (args.serializers.empty() || args.serializers.find("nlohmann_msgpack") != args.serializers.end()) {
+            results.push_back(nlohmann_msgpack_serialization_test(args.iterations));
+        }
+
+        if (args.serializers.empty() || args.serializers.find("nlohmann_ubjson") != args.serializers.end()) {
+            results.push_back(nlohmann_ubjson_serialization_test(args.iterations));
         }
     } catch (std::exception& exc) {
         std::cerr << "Error: " << exc.what() << std::endl;

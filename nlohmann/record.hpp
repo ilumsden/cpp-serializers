@@ -4,11 +4,13 @@
 #include <vector>
 #include <string>
 #include <sstream>
+#include <cstdio>
 
 #include <nlohmann/json.hpp>
 
 namespace nlohmann_test 
 {
+    class Record;
     std::string serialize(Record& rec);
     Record deserialize(std::string& data, unsigned int binary=0);
 
@@ -21,8 +23,8 @@ namespace nlohmann_test
             Integers ids;
             Strings  strings;
 
-            Record(unsigned int binary=0)
-                : binary_status(binary)
+            Record(unsigned int mode=0)
+                : binary_status(mode)
             {}
 
             bool operator==(const Record& other)
@@ -55,7 +57,63 @@ namespace nlohmann_test
         }
         else
         {
-            std::vector<uint8_t> bsondata = json::to_bson(jsondata);
+            std::vector<uint8_t> bsondata;
+            if (rec.binary_status == 1)
+            {
+                try
+                {
+                    bsondata = nlohmann::json::to_bson(jsondata);
+                }
+                catch(nlohmann::json::exception& e)
+                {
+                    fprintf(stderr, "Error occured while converting JSON object to BSON:\n");
+                    fprintf(stderr, "    Message: %s\n", e.what());
+                    fprintf(stderr, "    Exception ID: %d\n", e.id);
+                    throw;
+                }
+            }
+            else if (rec.binary_status == 2)
+            {
+                try
+                {
+                    bsondata = nlohmann::json::to_cbor(jsondata);
+                }
+                catch(nlohmann::json::exception& e)
+                {
+                    fprintf(stderr, "Error occured while converting JSON object to BSON:\n");
+                    fprintf(stderr, "    Message: %s\n", e.what());
+                    fprintf(stderr, "    Exception ID: %d\n", e.id);
+                    throw;
+                }
+            }
+            else if (rec.binary_status == 3)
+            {
+                try
+                {
+                    bsondata = nlohmann::json::to_msgpack(jsondata);
+                }
+                catch(nlohmann::json::exception& e)
+                {
+                    fprintf(stderr, "Error occured while converting JSON object to BSON:\n");
+                    fprintf(stderr, "    Message: %s\n", e.what());
+                    fprintf(stderr, "    Exception ID: %d\n", e.id);
+                    throw;
+                }
+            }
+            else
+            {
+                try
+                {
+                    bsondata = nlohmann::json::to_ubjson(jsondata);
+                }
+                catch(nlohmann::json::exception& e)
+                {
+                    fprintf(stderr, "Error occured while converting JSON object to BSON:\n");
+                    fprintf(stderr, "    Message: %s\n", e.what());
+                    fprintf(stderr, "    Exception ID: %d\n", e.id);
+                    throw;
+                }
+            }
             dumped = std::string(bsondata.begin(), bsondata.end());
         }
         return dumped;
@@ -66,15 +124,90 @@ namespace nlohmann_test
         nlohmann::json jsondata;
         if (binary == 0)
         {
-            jsondata = json::parse(data);
+            jsondata = nlohmann::json::parse(data);
         }
         else
         {
-            jsondata = json::from_bson(std::vector<uint8_t>(data.begin(), data.end()));
+            if (binary == 1)
+            {
+                try
+                {
+                    jsondata = nlohmann::json::from_bson(std::vector<uint8_t>(data.begin(), data.end()));
+                }
+                catch(nlohmann::json::exception& e)
+                {
+                    fprintf(stderr, "Error occured while converting BSON back into JSON object:\n");
+                    fprintf(stderr, "    Message: %s\n", e.what());
+                    fprintf(stderr, "    Exception ID: %d\n", e.id);
+                    throw;
+                }
+            }
+            else if (binary == 2)
+            {
+                try
+                {
+                    jsondata = nlohmann::json::from_cbor(std::vector<uint8_t>(data.begin(), data.end()));
+                }
+                catch(nlohmann::json::exception& e)
+                {
+                    fprintf(stderr, "Error occured while converting BSON back into JSON object:\n");
+                    fprintf(stderr, "    Message: %s\n", e.what());
+                    fprintf(stderr, "    Exception ID: %d\n", e.id);
+                    throw;
+                }
+            }
+            else if (binary == 3)
+            {
+                try
+                {
+                    jsondata = nlohmann::json::from_msgpack(std::vector<uint8_t>(data.begin(), data.end()));
+                }
+                catch(nlohmann::json::exception& e)
+                {
+                    fprintf(stderr, "Error occured while converting BSON back into JSON object:\n");
+                    fprintf(stderr, "    Message: %s\n", e.what());
+                    fprintf(stderr, "    Exception ID: %d\n", e.id);
+                    throw;
+                }
+            }
+            else
+            {
+                try
+                {
+                    jsondata = nlohmann::json::from_ubjson(std::vector<uint8_t>(data.begin(), data.end()));
+                }
+                catch(nlohmann::json::exception& e)
+                {
+                    fprintf(stderr, "Error occured while converting BSON back into JSON object:\n");
+                    fprintf(stderr, "    Message: %s\n", e.what());
+                    fprintf(stderr, "    Exception ID: %d\n", e.id);
+                    throw;
+                }
+            }
         }
         Record rec(binary);
-        rec.ids = jsondata["ids"];
-        rec.strings = jsondata["strings"];
+        try
+        {
+            rec.ids = jsondata["ids"].get<Integers>();
+        }
+        catch(nlohmann::json::exception& e)
+        {
+            fprintf(stderr, "Error occured while getting ids:\n");
+            fprintf(stderr, "    Message: %s\n", e.what());
+            fprintf(stderr, "    Exception ID: %d\n", e.id);
+            throw;
+        }
+        try
+        {
+            rec.strings = jsondata["strings"].get<Strings>();
+        }
+        catch(nlohmann::json::exception& e)
+        {
+            fprintf(stderr, "Error occured while getting strings:\n");
+            fprintf(stderr, "    Message: %s\n", e.what());
+            fprintf(stderr, "    Exception ID: %d\n", e.id);
+            throw;
+        }
         return rec;
     }
 
