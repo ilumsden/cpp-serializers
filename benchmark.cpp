@@ -29,10 +29,13 @@
 #include "avro/record.hpp"
 #include "flatbuffers/test_generated.h"
 #include "yas/record.hpp"
+#include "nlohmann/record.hpp"
 
 #include "data.hpp"
 
 enum class ThriftSerializationProto { Binary, Compact };
+
+#define NLOHMANN_BINARY_STATUS 0
 
 struct Args {
     std::size_t iterations = 0;
@@ -75,7 +78,8 @@ const std::set<std::string> valid_serializers = {
     "capnproto",
     "flatbuffers",
     "yas",
-    "yas-compact"
+    "yas-compact",
+    "nlohmann"
 };
 // clang-format on
 
@@ -393,6 +397,43 @@ boost_serialization_test(size_t iterations)
 }
 
 Result
+nlohmann_serialization_test(size_t iterations)
+{
+    using namespace nlohmann_test;
+
+    Record r1(NLOHMANN_BINARY_STATUS);
+    Record r2(NLOHMANN_BINARY_STATUS);
+
+    for (size_t i = 0; i < kIntegers.size(); i++) {
+        r1.ids.push_back(kIntegers[i]);
+    }
+
+    for (size_t i = 0; i < kStringsCount; i++) {
+        r1.strings.push_back(kStringValue);
+    }
+
+    std::string serialized;
+
+    serialized = serialize(r1);
+    r2 = deserialize(serialized);
+
+    if (r1 != r2) {
+        throw std::logic_error("nlohmann's case: deserialization failed");
+    }
+
+    auto start = std::chrono::high_resolution_clock::now();
+    for (size_t i = 0; i < iterations; i++) {
+        serialized.clear();
+        serialized = serialize(r1);
+        r2 = deserialize(serialized);
+    }
+    auto finish = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count();
+
+    return Result("nlohmann", "", serialized.size(), duration);
+}
+
+Result
 msgpack_serialization_test(size_t iterations)
 {
     using namespace msgpack_test;
@@ -692,6 +733,10 @@ main(int argc, char** argv)
 
         if (args.serializers.empty() || args.serializers.find("yas-compact") != args.serializers.end()) {
             results.push_back(yas_serialization_test<yas::binary | yas::no_header | yas::compacted>(args.iterations));
+        }
+
+        if (args.serializers.empty() || args.serializers.find("nlohmann") != args.serializers.end()) {
+            results.push_back(nlohmann_serialization_test(args.iterations));
         }
     } catch (std::exception& exc) {
         std::cerr << "Error: " << exc.what() << std::endl;
